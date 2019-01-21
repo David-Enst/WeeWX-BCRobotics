@@ -3,7 +3,7 @@
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
 
-See:    https://www.sparkfun.com/products/8942
+See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
 """
