@@ -6,8 +6,10 @@ weewx-bcrobo
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS weather meters 
 connected to the BC Robotics interface.
 
-See:  https://www.sparkfun.com/products/8942
-      https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
+See:
+https://www.sparkfun.com/products/8942
+
+https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
 INTRODUCTION
 
@@ -23,35 +25,61 @@ Before installing the BC Robotics driver, setup the required software by running
 following commands (in this order):
 
 [Install the Adafruit Python GPIO Library]
+
   sudo apt-get update
+  
   sudo apt-get install build-essential python-pip python-dev python-smbus git
+  
   git clone https://github.com/adafruit/Adafruit_Python_GPIO.git
+  
   cd Adafruit_Python_GPIO
+  
   sudo python setup.py install
+  
 
 [Install the Adafruit BME280 Library]
+
   cd
+  
   git clone https://github.com/adafruit/Adafruit_Python_BME280.git
+  
   cd Adafruit_Python_BME280
+  
   sudo python setup.py install
+  
 
 [Test the BME280 Sensor if desired]
+
   python Adafruit_BME280_Example.py
+  
 
 [Install the ADS1x15 Library, the ADS1015 Analog to Digital chip (wind direction)]
+
   cd
+  
   git clone https://github.com/adafruit/Adafruit_Python_ADS1x15.git
+  
   cd Adafruit_Python_ADS1x15
+  
   sudo python setup.py install
+  
 
 [Setup the DS18B20 temperature sensor and install the software library]
+
   cd
+  
   sudo modprobe w1-gpio
+  
   sudo modprobe w1-therm
+  
   cd /sys/bus/w1/devices
+  
   ls
+  
   cd
+  
   sudo apt-get install python-w1thermsensor
+  
   
 The “ls” command will display the contents of the devices 'folder' in the window. The 
 DS18B20 shows up as an address something like "28-0316853d8fff" – but each sensor has 
@@ -62,6 +90,7 @@ TESTING THE HARDWARE
 You can test the sensors by running the included test app: BCRobotics-test-app.py
 
 Run the Python IDE:
+
   >>idle
 
 Now open the "BCRobotics-test-app.py" test app from the IDE and hit 'F5' to run it. It will 
