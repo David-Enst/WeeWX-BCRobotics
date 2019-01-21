@@ -105,11 +105,11 @@ DRIVER INSTALLATION
 
 2) download the driver
 
-wget -O WeeWX-BCRobotics.zip https://github.com/David-Enst/WeeWX-BCRobotics/archive/master.zip
+wget -O BCRobotics.zip https://github.com/David-Enst/WeeWX-BCRobotics/archive/master.zip
 
 3) install the driver
 
-wee_extension --install weewx-bcrobo.zip
+wee_extension --install BCRobotics.zip
 
 4) configure the driver
 
