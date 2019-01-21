@@ -1,0 +1,23 @@
+0.0.2 07 Jan 2019
+* fix initialization
+
+0.0.3 09 Jan 2019
+* fix GPIO event handling
+
+1.0.4 09 Jan 2019
+* first release, fix logging error
+
+1.0.6 09 Jan 2019
+* fix ADC / windDir error
+
+1.0.7 14 Jan 2019
+* fix rain error
+
+1.0.12 15 Jan 2019
+* adjust humidity for outTemp vs. case_temp 
+
+1.0.16 17 Jan 2019
+* catch single erronious rain ticks 
+
+1.0.17 19 Jan 2019
+* fix wind direction error 
