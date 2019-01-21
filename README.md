@@ -104,15 +104,19 @@ DRIVER INSTALLATION
 1) install weewx (see the weewx user guide)
 
 2) download the driver
+
 wget -O WeeWX-BCRobotics.zip https://github.com/David-Enst/WeeWX-BCRobotics/archive/master.zip
 
 3) install the driver
+
 wee_extension --install weewx-bcrobo.zip
 
 4) configure the driver
+
 wee_config --reconfigure
 
 5) start weewx
+
 sudo /etc/init.d/weewx start
 
  NOTE: We have moved to the 21st Century, so the database is in METRIC!
