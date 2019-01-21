@@ -52,8 +52,8 @@ following commands (in this order):
   cd
   sudo apt-get install python-w1thermsensor
   
-The ìlsî command will display the contents of the devices 'folder' in the window. The 
-DS18B20 shows up as an address something like "28-0316853d8fff" ñ but each sensor has 
+The ‚Äúls‚Äù command will display the contents of the devices 'folder' in the window. The 
+DS18B20 shows up as an address something like "28-0316853d8fff" ‚Äì but each sensor has 
 a unique ID.
 
 TESTING THE HARDWARE
@@ -79,7 +79,7 @@ DRIVER INSTALLATION
 2) download the driver
 
 
-wget -O weewx-swb.zip https://github.com/matthewwall/weewx-swb/archive/master.zip
+wget -O WeeWX-BCRobotics.zip https://github.com/David-Enst/WeeWX-BCRobotics/archive/master.zip
 
 
 3) install the driver
