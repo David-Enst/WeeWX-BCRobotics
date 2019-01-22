@@ -23,12 +23,13 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '1.0.17'
+DRIVER_VERSION = '1.0.18'
 
 windTick = 0     # Count of the wind speed input trigger
 rainTick = 0     # Count of the rain input trigger
 interval = 3     # Set now to define scope of variable
 rainTime = 0     # Use this to detect erroneous rain events
+out_Temp = 0     # Set now to define scope
 
 try:
      ds18b20 = W1ThermSensor()
@@ -178,7 +179,10 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
                   global rainTime
                   if int(time.time())-rainTime >= 3600:
                       loginf('Possible bad rain tick')
-                      rainTime = int(time.time())
+                      if out_Temp <= -5:
+                          loginf('Bad rain tick')
+                      else:
+                          rainTime = int(time.time())
                   else:
                       rainTick += 1
                       rainTime = int(time.time())
@@ -256,7 +260,8 @@ class StationData():
 
         #if global TempSensor
         # Get temperature from DS18B20 sensor in degrees_C
-        outTemp = ds18b20.get_temperature()
+        global out_Temp
+        out_Temp = ds18b20.get_temperature()
         
         # Get Temperature from BME280 in degrees_C
         case_temp = bme.read_temperature()
@@ -277,7 +282,7 @@ class StationData():
         absMoisture = humidity * 0.42 * math.exp(case_temp * 0.06235398)/10
         
         # Adjust humidity reading to the outside temperature
-        humidity = absMoisture * 10 / (0.42 * math.exp(outTemp * 0.06235398))
+        humidity = absMoisture * 10 / (0.42 * math.exp(out_Temp * 0.06235398))
 
         # Calculate wind direction (angle) based on ADC reading
         #   Read ADC channel 0 with a gain of 1
@@ -352,7 +357,7 @@ class StationData():
         
         if rain > 0:
             raintxt = str(rain)
-            loginf('Rain is falling: ' + raintxt)
+        #    loginf('Rain is falling: ' + raintxt)
             rainRate = (rain / interval) * 3600  # cm/h
             rainTick = 0
         else:
@@ -362,7 +367,7 @@ class StationData():
         data = dict()
         data['windSpeed'] = windSpeed   # km/h
         data['windDir'] = windDir       # compass deg
-        data['outTemp'] = outTemp       # degree_C
+        data['outTemp'] = out_Temp      # degree_C
         data['rain'] = rain             # cm as per default
         data['rainRate'] = rainRate     # cm/hr
         data['pressure'] = pressure     # mbar
