@@ -1,4 +1,5 @@
 # Copyright 2019 David W. Enstrom, all rights reserved
+# Distributed under the terms of the GNU Public License (GPLv3)
 """
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
@@ -23,13 +24,13 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '1.0.18'
+DRIVER_VERSION = '1.0.23'
 
 windTick = 0     # Count of the wind speed input trigger
 rainTick = 0     # Count of the rain input trigger
 interval = 3     # Set now to define scope of variable
 rainTime = 0     # Use this to detect erroneous rain events
-out_Temp = 0     # Set now to define scope
+out_Temp = 0     # Set now to define scope for rain check
 
 try:
      ds18b20 = W1ThermSensor()
@@ -59,7 +60,6 @@ class BCRoboConfEditor(weewx.drivers.AbstractConfEditor):
     # This section is for the "Spark Fun" SEN-08942 / BC Robotics weather stations.
     # See: https://www.sparkfun.com/products/8942
     #      https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
-
 
     # The time (in seconds) between LOOP packets. Default is:
     loop_interval = 3
@@ -122,15 +122,14 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
     """weewx driver that communicates with a "Spark Fun" SEN-08942 / BC Robotics station
 
     mode - Communication mode - TCP, UDP, or Serial.
-    [Required. Default is serial]
-
+    [Required. Default is serial] 
     
     port - Serial port or network address.
     [Required. Default is /dev/ttyS0 for serial,
      and 192.168.36.25:3000 for TCP/IP]
 
     loop_interval - The time (in seconds) between LOOP packets.
-    [Required. Default is loop_interval = 3.0]
+    [Required. Default is loop_interval = 3]
     
     timeout - The amount of time, in seconds, before the connection fails if
     there is no response.
@@ -177,9 +176,10 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
               def raintrig(self):
                   global rainTick
                   global rainTime
-                  if int(time.time())-rainTime >= 3600:
+                  global out_Temp
+                  if int(time.time())-rainTime >= 3600: 
                       loginf('Possible bad rain tick')
-                      if out_Temp <= -5:
+                      if out_Temp <= 0:   # can't rain in the winter
                           loginf('Bad rain tick')
                       else:
                           rainTime = int(time.time())
@@ -193,9 +193,6 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
                loginf('Error setting up GPIO: ' % err)
          else:
                loginf('GPIO setup fine.')
-
-
-
 
     @property
     def hardware_name(self):
@@ -244,13 +241,14 @@ class StationData():
 
         The following data is provided by the sensor hardware:
 
-          windSpeed   - from total ticks (1 tick/sec = 2.4 km/h)
-          windDir     - wind direction (0-255)
-          outTemp     - outdoor temperature (in Deg C)
-          rain        - rain during the loop_interval (1 tick = 0.2794 mm)
-          pressure    - pressure (in Pascals)
-          inTemp      - hardware case temperature (in Deg C)
-          outHumidity - outdoor humidity (+/-0.1 %)
+          windSpeed    - from total ticks (1 tick/sec = 2.4 km/h)
+          windDir      - wind direction (0-255)
+          out_Temp     - outdoor temperature (in Deg C)
+          rain         - rain during the loop_interval (1 tick = 0.2794 mm)
+          pressure     - pressure (in Pascals)
+          in_Temp      - hardware case temperature (in Deg C)
+          out_Humidity - outdoor humidity (calc from in_Humidity and out_Temp)
+          in_Humidity  - humidity inside the case (+/-0.1 %)
           
         """
         #
@@ -272,17 +270,19 @@ class StationData():
         pressure = bme.read_pressure() / 100
         
         # Get Humidity (inside the case) from BME280 in %
-        humidity = bme.read_humidity()
+        in_humidity = bme.read_humidity()
         
-        # This humidity is measured inside the case, 
-        # which is warmer than the ambient air. Therefore
-        # it is converted to external humitity based upon  
-        # the case_temp and outTemp. First calculate the 
-        # absolute moisture. 
-        absMoisture = humidity * 0.42 * math.exp(case_temp * 0.06235398)/10
+        # This humidity is measured inside the case, which is warmer than the 
+        # ambient air. Therefore it is converted to external humidity based
+        # upon the case_temp and outTemp. 
+        # 
+        # First calculate the absolute moisture.
+        absMoisture = in_humidity * 0.42 * math.exp(case_temp * 0.06235398)/10
         
         # Adjust humidity reading to the outside temperature
-        humidity = absMoisture * 10 / (0.42 * math.exp(out_Temp * 0.06235398))
+        out_humidity = absMoisture * 10 / (0.42 * math.exp(out_Temp * 0.06235394))
+        if out_humidity > 100:
+            out_humidity = 100.0
 
         # Calculate wind direction (angle) based on ADC reading
         #   Read ADC channel 0 with a gain of 1
@@ -320,7 +320,7 @@ class StationData():
         if 5000 <= val <= 6599:
             windDir = 202.5
 
-        if 15900 <= val <= 16999:
+        if 15900 <= val <= 17499:
             windDir = 225
 
         if 14000 <= val <= 15899:
@@ -365,14 +365,15 @@ class StationData():
             rain = None 
             
         data = dict()
-        data['windSpeed'] = windSpeed   # km/h
-        data['windDir'] = windDir       # compass deg
-        data['outTemp'] = out_Temp      # degree_C
-        data['rain'] = rain             # cm as per default
-        data['rainRate'] = rainRate     # cm/hr
-        data['pressure'] = pressure     # mbar
-        data['inTemp'] = case_temp      # degree_C
-        data['outHumidity'] = humidity  # percent
+        data['windSpeed'] = windSpeed       # km/h
+        data['windDir'] = windDir           # compass deg
+        data['outTemp'] = out_Temp          # degree_C
+        data['rain'] = rain                 # cm as per default
+        data['rainRate'] = rainRate         # cm/hr
+        data['pressure'] = pressure         # mbar
+        data['inTemp'] = case_temp          # degree_C
+        data['inHumidity'] = in_humidity    # percent
+        data['outHumidity'] = out_humidity  # percent
         
         rain = 0
         rainRate = 0
