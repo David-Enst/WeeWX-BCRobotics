@@ -21,3 +21,6 @@
 
 1.0.17 19 Jan 2019
 * fix wind direction error 
+
+1.0.24 6 Feb 2019
+* improved humidity calculation
