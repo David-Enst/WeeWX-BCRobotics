@@ -24,7 +24,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '1.0.23'
+DRIVER_VERSION = '1.0.24'
 
 windTick = 0     # Count of the wind speed input trigger
 rainTick = 0     # Count of the rain input trigger
@@ -246,9 +246,9 @@ class StationData():
           out_Temp     - outdoor temperature (in Deg C)
           rain         - rain during the loop_interval (1 tick = 0.2794 mm)
           pressure     - pressure (in Pascals)
-          in_Temp      - hardware case temperature (in Deg C)
-          out_Humidity - outdoor humidity (calc from in_Humidity and out_Temp)
-          in_Humidity  - humidity inside the case (+/-0.1 %)
+          case_temp    - hardware case temperature (in Deg C)
+          out_humidity - outdoor humidity (calculated, see below)
+          in_humidity  - humidity inside the case (+/-0.1 %)
           
         """
         #
@@ -274,13 +274,17 @@ class StationData():
         
         # This humidity is measured inside the case, which is warmer than the 
         # ambient air. Therefore it is converted to external humidity based
-        # upon the case_temp and outTemp. 
+        # upon the case_temp, in_humidity, pressure, and out_Temp. 
         # 
-        # First calculate the absolute moisture.
-        absMoisture = in_humidity * 0.42 * math.exp(case_temp * 0.06235398)/10
+        # Use NOAA formulae:
+        VapPress = (6.112 * math.exp(17.67 * case_temp / (case_temp + 243.5))) * (in_humidity/100)
+        DewPoint = (243.5 * math.log(VapPress / 6.112))/(17.67 - math.log(VapPress / 6.112))
+        absVapPress = 6.11 * math.pow(10, (7.5 * DewPoint / (237.7 + DewPoint)))
+        actMixRatio = 621.97 * absVapPress / (pressure - absVapPress)
         
         # Adjust humidity reading to the outside temperature
-        out_humidity = absMoisture * 10 / (0.42 * math.exp(out_Temp * 0.06235394))
+        # using NOAA values:
+        out_humidity = actMixRatio * 10 / (0.42 * math.exp(out_Temp * 0.06235394))
         if out_humidity > 100:
             out_humidity = 100.0
 
