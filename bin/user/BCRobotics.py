@@ -177,15 +177,15 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
                   global rainTick
                   global rainTime
                   global out_Temp
-                  if int(time.time())-rainTime >= 3600: 
-                      loginf('Possible bad rain tick')
-                      if out_Temp <= 0:   # can't rain in the winter
-                          loginf('Bad rain tick')
+                  if out_Temp <= 0:    # can't rain in the winter
+                      loginf('Bad rain tick')
+                  else:
+                      if int(time.time())-rainTime >= 3600:
+                          loginf('Possible bad rain tick')
+                          rainTime = int(time.time())
                       else:
                           rainTime = int(time.time())
-                  else:
-                      rainTick += 1
-                      rainTime = int(time.time())
+                          rainTick += 1
               
               GPIO.add_event_callback(23, raintrig)
               
