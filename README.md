@@ -19,6 +19,8 @@ wind direction. The rain and wind speed are measured through the GPIO interface 
 counting "ticks" (rotations or measures of water). The driver includes a erroneous
 rain tick filter, since this sensor can emit single undesired ticks.
 
+If you want to build your own system see the documentation provided in the attached "Issue".
+
 SOFTWARE SETUP
 
 Before installing the BC Robotics driver, setup the required software by running the 
