@@ -64,6 +64,7 @@ while True:
     # Calculate wind direction based on ADC reading
     #   Read ADC channel 0 with a gain of 1
     val = adc.read_adc(0, gain=1)
+    windDir = "Not Connected" # In case wind sensor not connected
 
     if 19600 <= val <= 20999:
         windDir = "N"
