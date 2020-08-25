@@ -1,13 +1,20 @@
-# Copyright 2019 David W. Enstrom, all rights reserved
+# Copyright 2020 David W. Enstrom, all rights reserved
 # Distributed under the terms of the GNU Public License (GPLv3)
 """
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
 
+Updated to Python V3
+
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
 """
+
+import time
+import board
+import busio
+import adafruit_bme280
 
 import syslog
 import threading
@@ -15,8 +22,10 @@ import time
 import math
 
 from w1thermsensor import W1ThermSensor
-from Adafruit_BME280 import *
-import Adafruit_ADS1x15
+ 
+import adafruit_ads1x15.ads1015 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+ 
 import RPi.GPIO as GPIO
 
 import weewx.drivers
@@ -24,25 +33,65 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '1.0.24'
+DRIVER_VERSION = '2.0.27'
+
+def logmsg(dst, msg):
+    syslog.syslog(dst, 'BCRobo: %s: %s' %
+                  (threading.currentThread().getName(), msg))
+    
+def logdbg(msg):
+    logmsg(syslog.LOG_DEBUG, msg)
+
+
+def loginf(msg):
+    logmsg(syslog.LOG_INFO, msg)
+
+
+def logcrt(msg):
+    logmsg(syslog.LOG_CRIT, msg)
+
+
+def logerr(msg):
+    logmsg(syslog.LOG_ERR, msg)
+
+
+def logtee(msg):
+    loginf(msg)
+    print ("%s\r" % msg)
 
 windTick = 0     # Count of the wind speed input trigger
 rainTick = 0     # Count of the rain input trigger
 interval = 3     # Set now to define scope of variable
 rainTime = 0     # Use this to detect erroneous rain events
 out_Temp = 0     # Set now to define scope for rain check
+  
+try:
+    ds18b20 = W1ThermSensor()
+    TempSensor = True
+except Exception as err:
+    loginf('Temperature Sensor Error %s' % err)
+    TempSensor = False
+
+# Create library object using our Bus I2C port
+i2c = busio.I2C(board.SCL, board.SDA)
 
 try:
-     ds18b20 = W1ThermSensor()
+     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c)
 except Exception as err:
-     loginf('Error setting up Temperature Sensor %s' % err)
-     TempSensor = False
+     loginf('BME280 Pressure Error: %s' % err)
+     PressSensor = False
 else:
-     TempSensor = True
-
-bme = BME280(t_mode=BME280_OSAMPLE_8, p_mode=BME280_OSAMPLE_8, h_mode=BME280_OSAMPLE_8)
-adc = Adafruit_ADS1x15.ADS1115()
-
+     PressSensor = True
+ 
+try:
+     ads = ADS.ADS1015(i2c)
+     ads.gain = 1
+     chan = AnalogIn(ads, ADS.P0)
+except Exception as err:
+     loginf('Wind Sensor Error: %s' % err)
+     WindSensor = False
+else:
+     WindSensor = True
 
 
 def loader(config_dict, _):
@@ -92,30 +141,6 @@ DEBUG_WEATHER_DATA = 0
 DEBUG_HISTORY_DATA = 0
 DEBUG_DUMP_FORMAT = 'auto'
 
-
-def logmsg(dst, msg):
-    syslog.syslog(dst, 'BCRobo: %s: %s' %
-                  (threading.currentThread().getName(), msg))
-    
-def logdbg(msg):
-    logmsg(syslog.LOG_DEBUG, msg)
-
-
-def loginf(msg):
-    logmsg(syslog.LOG_INFO, msg)
-
-
-def logcrt(msg):
-    logmsg(syslog.LOG_CRIT, msg)
-
-
-def logerr(msg):
-    logmsg(syslog.LOG_ERR, msg)
-
-
-def logtee(msg):
-    loginf(msg)
-    print "%s\r" % msg
 
 
 class BCRoboDriver(weewx.drivers.AbstractDevice):
@@ -179,7 +204,7 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
                   global out_Temp
                   if out_Temp <= 0:    # can't rain in the winter
                       loginf('Bad rain tick')
-                  else:
+                  else:       # see if a random tick in last hour
                       if int(time.time())-rainTime >= 3600:
                           loginf('Possible bad rain tick')
                           rainTime = int(time.time())
@@ -256,21 +281,28 @@ class StationData():
         # NOTE: The pressure reading is 'pressure', not 'barometer'
         #
 
+        # If sensor OK, get Temperature from BME280 in degrees_C
+        if PressSensor :
+            case_temp = bme.temperature
+        
+        # Get Barometric Pressure from BME280 in mbar
+        #   mbar = hPa
+        #   
+            pressure = bme.pressure  
+            #loginf('BCRobo Pressure: ' + str(pressure))
+        
+        # Get Humidity (inside the case) from BME280 in %
+            in_humidity = bme.humidity
+            #loginf('BCRobo Humidity: ' + str(in_humidity))
+            
         #if global TempSensor
         # Get temperature from DS18B20 sensor in degrees_C
         global out_Temp
-        out_Temp = ds18b20.get_temperature()
+        out_temp = 0
+        if TempSensor : out_Temp = ds18b20.get_temperature()
+        else: out_Temp = case_temp
         
-        # Get Temperature from BME280 in degrees_C
-        case_temp = bme.read_temperature()
-        
-        # Get Barometric Pressure from BME280 in Pascals
-        #   and convert to mbar
-        #   100 pascal = 1 mbar, or 0.00029529983071445 inhg
-        pressure = bme.read_pressure() / 100
-        
-        # Get Humidity (inside the case) from BME280 in %
-        in_humidity = bme.read_humidity()
+
         
         # This humidity is measured inside the case, which is warmer than the 
         # ambient air. Therefore it is converted to external humidity based
@@ -290,9 +322,8 @@ class StationData():
 
         # Calculate wind direction (angle) based on ADC reading
         #   Read ADC channel 0 with a gain of 1
+        val = chan.value
         windDir = 1.5
-
-        val = adc.read_adc(0, gain=1)
 
         if 19600 <= val <= 20999:
             windDir = 0
@@ -349,7 +380,7 @@ class StationData():
 
         # Calculate the average wind speed over this 'interval' (km/h)
         #  1 tick/sec = 1.492 mph or 2.4 km/h
-        #  So: (windTick * 2.4) / loop_interval
+        #  Therefore: (windTick * 2.4) / loop_interval
         global windTick
         windSpeed = (windTick * 2.4) / interval
         windTick = 0
@@ -360,7 +391,7 @@ class StationData():
         rain = rainTick * 0.02794
         
         if rain > 0:
-            raintxt = str(rain)
+        #    raintxt = str(rain)
         #    loginf('Rain is falling: ' + raintxt)
             rainRate = (rain / interval) * 3600  # cm/h
             rainTick = 0
@@ -393,7 +424,8 @@ class StationData():
 
 
 # Define a main entry point for basic testing of the station without weewx
-# engine and service overhead.  Invoke this as follows from the WeeWX root dir (i.e., /usr/bin/weewxd):
+# engine and service overhead.  Invoke this as follows from the WeeWX root 
+# dir (i.e., /usr/bin/weewxd):
 #
 # sudo PYTHONPATH=/usr/share/weewx python /usr/share/weewx/user/BCRobotics.py
 # 
@@ -408,6 +440,4 @@ if __name__ == '__main__':
 
         time.sleep(interval)
         while True:
-            print time.time(), s.get_readings()
-
-
+            print (time.time(), s.get_readings())
