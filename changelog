@@ -24,3 +24,6 @@
 
 1.0.24 6 Feb 2019
 * improved humidity calculation
+ 
+2.0.27 26 Aug 2020
+* Updated the driver to Python V3
