@@ -1,16 +1,15 @@
-# Copyright 2020 David W. Enstrom, all rights reserved
+# Copyright 2019 David W. Enstrom, all rights reserved
 # Distributed under the terms of the GNU Public License (GPLv3)
 """
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
 
-Updated to Python V3
+Updated to use Python V3
 
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
 """
-
 import time
 import board
 import busio
@@ -33,7 +32,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.0.27'
+DRIVER_VERSION = '2.1.17'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -64,9 +63,12 @@ rainTick = 0     # Count of the rain input trigger
 interval = 3     # Set now to define scope of variable
 rainTime = 0     # Use this to detect erroneous rain events
 out_Temp = 0     # Set now to define scope for rain check
+last_out = 0     # To handle temp sensor errors
   
 try:
     ds18b20 = W1ThermSensor()
+    time.sleep(interval)
+    loginf('W1ThermSensor setup fine.')
     TempSensor = True
 except Exception as err:
     loginf('Temperature Sensor Error %s' % err)
@@ -298,11 +300,18 @@ class StationData():
         #if global TempSensor
         # Get temperature from DS18B20 sensor in degrees_C
         global out_Temp
+        global last_out
         out_temp = 0
-        if TempSensor : out_Temp = ds18b20.get_temperature()
-        else: out_Temp = case_temp
-        
-
+        # Handle Temp Sensor Errors
+        if TempSensor : 
+            try:
+                out_Temp = ds18b20.get_temperature()
+                last_out = out_Temp
+            except Exception as err:
+                loginf('Temp Sensor Error: %s' % err)
+                out_Temp = last_out
+        else: 
+            out_Temp = case_temp
         
         # This humidity is measured inside the case, which is warmer than the 
         # ambient air. Therefore it is converted to external humidity based
@@ -310,8 +319,14 @@ class StationData():
         # 
         # Use NOAA formulae:
         VapPress = (6.112 * math.exp(17.67 * case_temp / (case_temp + 243.5))) * (in_humidity/100)
+        if VapPress <= 0:
+            loginf('VapPress error: ' + str(VapPress))
+            VapPress = 3
         DewPoint = (243.5 * math.log(VapPress / 6.112))/(17.67 - math.log(VapPress / 6.112))
         absVapPress = 6.11 * math.pow(10, (7.5 * DewPoint / (237.7 + DewPoint)))
+        if absVapPress == pressure:
+            absVapPress = absVapPress + 1
+            loginf('absVapPress error: ' + str(pressure))
         actMixRatio = 621.97 * absVapPress / (pressure - absVapPress)
         
         # Adjust humidity reading to the outside temperature
@@ -324,6 +339,8 @@ class StationData():
         #   Read ADC channel 0 with a gain of 1
         val = chan.value
         windDir = 1.5
+
+        ##########val = adc.read_adc(0, gain=1)
 
         if 19600 <= val <= 20999:
             windDir = 0
@@ -375,12 +392,12 @@ class StationData():
 
         if windDir == 1.5:
             value = str(val)
-            loginf('Wind direction error: ' + value)
+            #loginf('Wind direction error: ' + value)
 
 
         # Calculate the average wind speed over this 'interval' (km/h)
         #  1 tick/sec = 1.492 mph or 2.4 km/h
-        #  Therefore: (windTick * 2.4) / loop_interval
+        #  So: (windTick * 2.4) / loop_interval
         global windTick
         windSpeed = (windTick * 2.4) / interval
         windTick = 0
