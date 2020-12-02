@@ -1,5 +1,4 @@
 import time
-import time
 import board
 import busio
 import adafruit_bme280
@@ -81,7 +80,7 @@ while True:
         case_temp = bme.temperature 
         pressure_pa= bme.pressure
         #pressure_pa = pressure_pa + 87/8.3 # adjust to sea level
-        pressure = pressure_pa    # leave in hPa = mBar
+        pressure = pressure_pa / 10   # convert to kPa from pascals
         humidity = bme.humidity
 
     # Calculate wind direction based on ADC reading
@@ -159,3 +158,4 @@ while True:
     print ("Rainfall:   %0.2f  mm" % rainFall)
     print (" ")
     time.sleep(interval)
+    
