@@ -5,6 +5,8 @@ Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
 
 Updated to use Python V3
+ - capabilty to bench test (i.e., no sensors) 2-Dec-2020
+ - additional error checking and reporting 22-Dec-2020
 
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
@@ -32,7 +34,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.1.17'
+DRIVER_VERSION = '2.1.20'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -175,16 +177,12 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
          #loginf('Interval is %s' % interval)
          global rainTime
          rainTime = int(time.time())   # used to detect erronious rain ticks
+         # Set GPIO pins to use BCM pin numbers
+         GPIO.setmode(GPIO.BCM)
 
-         try:
-              # Set GPIO pins to use BCM pin numbers
-              GPIO.setmode(GPIO.BCM)
-              
+         try:           
               # Set digital pin 17 to an input and enable the pullup (wind speed)
               GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-              # Set digital pin 23 to an input and enable the pullup (rain)
-              GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
               # Define event to detect wind (4 ticks per revolution)
               #  1 tick/sec = 1.492 mph or 2.4 km/h
@@ -195,7 +193,16 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
                   windTick += 1
                 
               GPIO.add_event_callback(17, windtrig)
+        
+         except Exception as err:
+               loginf('Error setting up GPIO 17: %s' % err)
+         else:
+               loginf('GPIO 17 setup fine.')
 
+         try:    
+              # Set digital pin 23 to an input and enable the pullup (rain)
+              GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        
               # Define event to detect rain (0.2794mm per tick)
               # with a 1hr time period where the first tick is ignored
               # which is used to detect an improper single tick
@@ -217,9 +224,9 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
               GPIO.add_event_callback(23, raintrig)
               
          except Exception as err:
-               loginf('Error setting up GPIO: ' % err)
+               loginf('Error setting up GPIO 23: %s' % err)
          else:
-               loginf('GPIO setup fine.')
+               loginf('GPIO 23 setup fine.')
 
     @property
     def hardware_name(self):
