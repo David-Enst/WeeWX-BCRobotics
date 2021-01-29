@@ -34,7 +34,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.1.20'
+DRIVER_VERSION = '2.2.4'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -414,6 +414,26 @@ class StationData():
         global rainTick
         rain = rainTick * 0.02794
         
+        # Calculate Windchill 
+        wind_chill = out_Temp
+        if out_Temp < 0 and windSpeed > 0 and windSpeed < 100: 
+            if windSpeed >= 5:
+                wind_chill = 13.12 + (0.6215 * out_Temp) - (11.37 * pow(windSpeed, 0.16)) + (0.3965 * out_Temp * pow(windSpeed, 0.16))
+            elif windSpeed < 5:
+                wind_chill = float(out_Temp) + ((((-1.59) + (0.1345*out_Temp))/5) * windSpeed)
+
+        # Calculate Outside Dew Point
+        VapPress = (6.112 * math.exp(17.67 * out_Temp / (out_Temp + 243.5))) * (out_humidity/100)
+        if VapPress <= 0:
+            loginf('VapPress error: ' + str(VapPress))
+            VapPress = 3
+        DewPoint = (243.5 * math.log(VapPress / 6.112))/(17.67 - math.log(VapPress / 6.112))
+
+        # Calculate Humidex 
+        heat_index = out_Temp
+        if  out_Temp > 19:
+            heat_index = float(out_Temp) + 0.5555 * (6.11 * math.exp(5417.753 * ((1/273.16) - (1/(273.15 + float(DewPoint))))) - 10)
+
         if rain > 0:
         #    raintxt = str(rain)
         #    loginf('Rain is falling: ' + raintxt)
@@ -433,6 +453,10 @@ class StationData():
         data['inTemp'] = case_temp          # degree_C
         data['inHumidity'] = in_humidity    # percent
         data['outHumidity'] = out_humidity  # percent
+        data['dewpoint'] = DewPoint         # degree_C
+        data['windchill'] = wind_chill      # degree_C
+        data['heatindex'] = heat_index      # degree_C
+
         
         rain = 0
         rainRate = 0
