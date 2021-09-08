@@ -34,7 +34,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.2.4'
+DRIVER_VERSION = '2.2.5'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -437,7 +437,7 @@ class StationData():
         if rain > 0:
         #    raintxt = str(rain)
         #    loginf('Rain is falling: ' + raintxt)
-            rainRate = (rain / interval) * 3600  # cm/h
+            rainRate = (rain / interval) * 3600/interval  # cm/h
             rainTick = 0
         else:
             rainRate = None
