@@ -1,24 +1,56 @@
 import time
+import board
+import busio
+from adafruit_bme280 import basic as adafruit_bme280
+#import adafruit_bme280
+
 from w1thermsensor import W1ThermSensor
-from Adafruit_BME280 import *
-import Adafruit_ADS1x15
+import adafruit_ads1x15.ads1015 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+
 import RPi.GPIO as GPIO
 
+
+out_temp = 0
+
 try:
-     ds18b20 = W1ThermSensor()
+    ds18b20 = W1ThermSensor()
+    print ('DS18b20 temp sensor OK')
+    TempSensor = True
 except Exception as err:
-    print ('Error:', err)
-    noTemp = True
-else:
-    print ('carry on')
-    noTemp = False
+    print ('Temperature Sensor Error:', err)
+    TempSensor = False
 
-bme = BME280(t_mode=BME280_OSAMPLE_8, p_mode=BME280_OSAMPLE_8, h_mode=BME280_OSAMPLE_8)
-adc = Adafruit_ADS1x15.ADS1115()
+# Create library object using our Bus I2C port
+i2c = busio.I2C(board.SCL, board.SDA)
 
-interval = 2   # Time between loops (seconds)
+try:
+     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) # temp, pressure, humidity
+     PressSensor = True
+except Exception as err:
+     print ('BME280 Pressure Error:', err)
+     PressSensor = False
+ 
+try:
+     ads = ADS.ADS1015(i2c)        # wind and rain
+     ads.gain = 1
+     chan = AnalogIn(ads, ADS.P0)
+     WindSensor = True
+except Exception as err:
+     print ('Wind Sensor Error:', err)
+     WindSensor = False
+
+if PressSensor :
+    try:
+        bme.sea_level_pressure = 1025.25 # generic value
+    except Exception as err:
+        loginf('Pressure Sensor Error: %s' % err)
+
+
+interval = 8   # Time between loops (seconds)
 windTick = 0   # Count of the wind speed input trigger
 rainTick = 0   # Count of the rain input trigger
+val      = 0   # Wind direction
 
 # Set GPIO pins to use BCM pin numbers
 GPIO.setmode(GPIO.BCM)
@@ -46,25 +78,30 @@ def raintrig(self):
 GPIO.add_event_callback(23, raintrig)
 
 while True:
-    time.sleep(interval)
-    
+   
     # Get temperature from DS18B20 sensor
-    temperature = ds18b20.get_temperature()
+    if TempSensor : out_temp = ds18b20.get_temperature()
 
-    # Get Temperature from BME280
-    case_temp = bme.read_temperature()
+    # Get Temperature, humidity & Pressure from BME280
+    if PressSensor : 
+        case_temp = bme.temperature 
+        pressure_pa= bme.pressure
+        #pressure_pa = pressure_pa + 87/8.3 # adjust to sea level
+        pressure = pressure_pa    # leave in hPa = mBar
+        humidity = bme.humidity
+        altitude = bme.altitude
+    else:
+        altitude = 0
+        case_temp = 0
+        pressure = 0
+        humidity = 0
 
-    # Get Barometric Pressure from BME280 and convert to kPa from pascals
-    pressure_pa= bme.read_pressure()
-    pressure = pressure_pa / 1000
-
-    # Get Humidity from BME280
-    humidity = bme.read_humidity()
 
     # Calculate wind direction based on ADC reading
     #   Read ADC channel 0 with a gain of 1
-    val = adc.read_adc(0, gain=1)
-    windDir = "Not Connected" # In case wind sensor not connected
+    if WindSensor : val = chan.value
+
+    windDir = "Not connected"
 
     if 19600 <= val <= 20999:
         windDir = "N"
@@ -96,7 +133,7 @@ while True:
     if 5000 <= val <= 6599:
         windDir = "SSW"
 
-    if 15900 <= val <= 16999:
+    if 15900 <= val <= 17499:
         windDir = "SW"
 
     if 14000 <= val <= 15899:
@@ -124,13 +161,16 @@ while True:
     rainTick = 0
     
     # Print results
-    print 'Temperature: ', temperature, 'C'
-    print 'Humidity:    ', humidity, '%'
-    print 'Case Temp:   ', case_temp, 'C'
-    print 'Pressure:    ', pressure, 'kPa'
-    print 'Dir ADC val: ', val
-    print 'Wind Dir:    ', windDir
-    print 'Wind Speed:  ', windSpeed, 'km/h'
-    print 'Rainfall:    ', rainFall, 'mm'
-    print ' '
+    print("\nTemperature: %0.1f C" % out_temp)
+    print("Humidity: %0.1f %%" % humidity)
+    print("Pressure: %0.2f hPa" % pressure)
+    print("Case Temperature: %0.1f C" % case_temp) 
+    print("Altitude = %0.2f meters" % altitude)
     
+    print( 'Wind Dir:    ' , windDir, ' (', val, ')')
+    print ("Wind Speed: %0.2f km/h" % windSpeed)
+    print ("Rainfall:   %0.2f  mm" % rainFall)
+    print (" ")
+    time.sleep(interval)
+    
+
