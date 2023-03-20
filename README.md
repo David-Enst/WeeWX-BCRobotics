@@ -4,7 +4,10 @@ A WeeWX driver for the BC Robotics and SparkFun weather station Raspberry Pi bas
 weewx-bcrobo
 
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS weather meters 
-connected to the BC Robotics interface.
+connected to the BC Robotics interface connected to a Raspberry Pi.
+
+  Note: I have also written an Android app to display WeeWX readings, see:
+        https://sites.google.com/view/mywx/home
 
 See:
 https://www.sparkfun.com/products/8942
