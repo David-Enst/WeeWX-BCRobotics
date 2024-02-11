@@ -9,6 +9,13 @@ Updated to use Python V3
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
+NOTE: With the Bookworms version of Raspbian Python is installed in a virtual environment.
+      The following reference may be required for the driver to work properly with this environment. 
+      Change the references 'USER' and 'VIRTUALENV' as required for your install.
+
+import sys	# Define path to virtual PYTHON libraries
+sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
+
 """
 import time
 import board
@@ -33,7 +40,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.3.5'
+DRIVER_VERSION = '2.3.7'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -133,7 +140,7 @@ class BCRoboConfEditor(weewx.drivers.AbstractConfEditor):
     debug_read = 0
 
     # The driver to use:
-    driver = user.BCRobotics
+    driver = weewx.drivers.BCRobotics
     
 """
 
