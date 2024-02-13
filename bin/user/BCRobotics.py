@@ -9,12 +9,7 @@ Updated to use Python V3
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
 
-NOTE: With the Bookworms version of Raspbian Python is installed in a virtual environment.
-      The following reference may be required for the driver to work properly with this environment. 
-      Change the references 'USER' and 'VIRTUALENV' as required for your install.
-
-import sys	# Define path to virtual PYTHON libraries
-sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
+NOTE: With the Bookworm version of Raspbian, WeeWX MUST be installed in a virtual environment.
 
 """
 import time
