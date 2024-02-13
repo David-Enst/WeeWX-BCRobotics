@@ -23,9 +23,13 @@ counting "ticks" (rotations or measures of water). The driver includes a erroneo
 rain tick filter, since this sensor can emit single undesired ticks.
 
 If you want to build your own system see the documentation provided:
+
  1 - Weather Station Raspberry Pi Construction.pdf
+ 
  2 - Weather Station Raspberry Pi Software Setup for the MyWX App.pdf
+ 
  3 - Weather Station Raspberry Pi Security Setup for MyWX Pro.pdf 
+ 
 
 SOFTWARE and SECURITY SETUP
 
