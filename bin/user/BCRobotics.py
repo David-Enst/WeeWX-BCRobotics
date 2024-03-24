@@ -4,7 +4,8 @@
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
 weather meters and the BC Robotics interface.
 
-Updated to use Python V3
+- Updated to use Python V3
+- Finer grained error reporting
 
 See:    https://www.sparkfun.com/products/8942 
         https://www.bc-robotics.com/tutorials/raspberry-pi-weather-station-part-1/
@@ -15,7 +16,6 @@ NOTE: With the Bookworm version of Raspbian, WeeWX MUST be installed in a virtua
 import time
 import board
 import busio
-#import adafruit_bme280
 from adafruit_bme280 import basic as adafruit_bme280
 
 import syslog
@@ -35,7 +35,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '2.3.7'
+DRIVER_VERSION = '2.4.1'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s: %s' %
@@ -67,6 +67,11 @@ interval = 3     # Set now to define scope of variable
 rainTime = 0     # Use this to detect erroneous rain events
 out_Temp = 0     # Set now to define scope for rain check
 last_out = 0     # To handle temp sensor errors
+TempSensor = False  # Temperature sensor flag
+PressSensor = False # Pressure sensor flag
+WindSensor = False  # Wind direction sensor flag
+WindSpSens = False  # Wind speed sensor flag
+RainSensor = False  # Rain measurement sensor flag
   
 try:
     ds18b20 = W1ThermSensor()
@@ -82,22 +87,19 @@ i2c = busio.I2C(board.SCL, board.SDA)
 
 try:
      bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) # temp, pressure, humidity
+     PressSensor = True
 except Exception as err:
      loginf('BME280 Pressure Error: %s' % err)
      PressSensor = False
-else:
-     PressSensor = True
  
 try:
      ads = ADS.ADS1015(i2c)
      ads.gain = 1
      chan = AnalogIn(ads, ADS.P0)
+     WindSensor = True
 except Exception as err:
      loginf('Wind Sensor Error: %s' % err)
      WindSensor = False
-else:
-     WindSensor = True
-
 
 def loader(config_dict, _):
     return BCRoboDriver(**config_dict[DRIVER_NAME])
@@ -135,7 +137,7 @@ class BCRoboConfEditor(weewx.drivers.AbstractConfEditor):
     debug_read = 0
 
     # The driver to use:
-    driver = weewx.drivers.BCRobotics
+    driver = user.BCRobotics
     
 """
 
@@ -172,7 +174,7 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
     """
     def __init__(self, **stn_dict):
          
-         loginf('Driver version is %s' % DRIVER_VERSION)
+         loginf('Driver version:  %s' % DRIVER_VERSION)
          global interval
          interval = int(stn_dict.get('loop_interval', 3))
          #loginf('Interval is %s' % interval)
@@ -180,54 +182,54 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
          rainTime = int(time.time())   # used to detect erronious rain ticks
          # Set GPIO pins to use BCM pin numbers
          GPIO.setmode(GPIO.BCM)
-
+         
+         # Define event to detect wind (4 ticks per revolution)
+         #  1 tick/sec = 1.492 mph or 2.4 km/h
+         #  So: wind = (windTick * 2.4) / loop_interval
+         # 
+         def windtrig(self):
+             global windTick
+             windTick += 1
+            
+         # Set digital pin 17 to an input and enable the pullup (wind speed)
          try:
-             # Set digital pin 17 to an input and enable the pullup (wind speed)
              GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-             # Define event to detect wind (4 ticks per revolution)
-             #  1 tick/sec = 1.492 mph or 2.4 km/h
-             #  So: wind = (windTick * 2.4) / loop_interval
              GPIO.add_event_detect(17, GPIO.BOTH)
-             def windtrig(self):
-                  global windTick
-                  windTick += 1
-                
+
              GPIO.add_event_callback(17, windtrig)
-              
+             WindSpSens = True   
+             loginf('Windspeed GPIO 17 setup fine.')
          except Exception as err:
-               loginf('Error setting up GPIO 17: %s' % err)
-         else:
-               loginf('GPIO 17 setup fine.')
+             loginf('Windspeed Error GPIO 17: %s' % err)
+             WindSpSens = False
+             
+         # Define event to detect rain (0.2794mm per tick)
+         # with a 1hr time period where the first tick is ignored
+         # which is used to detect an improper single tick
+         def raintrig(self):
+            global rainTick
+            global rainTime
+            global out_Temp
+            if out_Temp <= 0:    # can't rain in the winter
+                 loginf('Bad rain tick')
+            else:       # see if a random tick in last hour
+                 if int(time.time())-rainTime >= 3600:
+                     loginf('Possible bad rain tick')
+                     rainTime = int(time.time())
+                 else:
+                     rainTime = int(time.time())
+                     rainTick += 1
 
+         # Set digital pin 23 to an input and enable the pullup (rain)
          try:
-              # Set digital pin 23 to an input and enable the pullup (rain)
               GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-              # Define event to detect rain (0.2794mm per tick)
-              # with a 1hr time period where the first tick is ignored
-              # which is used to detect an improper single tick
               GPIO.add_event_detect(23, GPIO.FALLING)
-              def raintrig(self):
-                  global rainTick
-                  global rainTime
-                  global out_Temp
-                  if out_Temp <= 0:    # can't rain in the winter
-                      loginf('Bad rain tick')
-                  else:       # see if a random tick in last hour
-                      if int(time.time())-rainTime >= 3600:
-                          loginf('Possible bad rain tick')
-                          rainTime = int(time.time())
-                      else:
-                          rainTime = int(time.time())
-                          rainTick += 1
-              
-              GPIO.add_event_callback(23, raintrig)
-              
+              GPIO.add_event_callback(23, raintrig) 
+              loginf('RainSensor GPIO 23 setup fine.')
+              RainSensor = True             
          except Exception as err:
-               loginf('Error setting up GPIO 23: %s' % err)
-         else:
-               loginf('GPIO 23 setup fine.')
+              RainSensor = False
+              loginf('RainSensor Error GPIO 23: %s' % err)
 
     @property
     def hardware_name(self):
@@ -306,13 +308,11 @@ class StationData():
             pressure = 850
             in_humidity = 90
 
-        #if global TempSensor
         # Get temperature from DS18B20 sensor in degrees_C
         global out_Temp
         global last_out
         out_temp = 0
-        # Handle Temp Sensor Errors
-        if TempSensor : 
+        if TempSensor : # If Sensor connected
             try:
                 out_Temp = ds18b20.get_temperature()
                 last_out = out_Temp
@@ -350,7 +350,8 @@ class StationData():
             val = chan.value
         else:
             val = 7000
-        windDir = 1.5
+            
+        windDir = 1.5 #Dummy value
 
         ##########val = adc.read_adc(0, gain=1)
 
@@ -411,16 +412,18 @@ class StationData():
         #  1 tick/sec = 1.492 mph or 2.4 km/h
         #  So: (windTick * 2.4) / loop_interval
         global windTick
-        if WindSensor :
+        if WindSpSens :
             windSpeed = (windTick * 2.4) / interval
             windTick = 0
         else:
-            windSpeed = 10
+            windSpeed = 0
+            windTick = 0
 
         # Calculate the rainfall over this 'interval' (cm)
         # 1 tick = 0.011 inches or 0.02794 cm 
         global rainTick
-        rain = rainTick * 0.02794
+        if RainSensor: rain = rainTick * 0.02794
+        else: rain = 0
         
         # Calculate Windchill 
         wind_chill = out_Temp
@@ -448,6 +451,7 @@ class StationData():
             rainRate = (rain / interval) * 3600/interval  # cm/h
             rainTick = 0
         else:
+            rainTick = 0
             rainRate = None
             rain = None 
             
