@@ -1,16 +1,21 @@
 import time
+import sys	
+# Define path to virtual PYTHON libraries
+#  to make testing easier, if desired
+sys.path.extend(["/home/user/virtenv/lib/python3.11/site-packages"])
+
 import board
 import busio
 from adafruit_bme280 import basic as adafruit_bme280
-#import adafruit_bme280
 
 from w1thermsensor import W1ThermSensor
 import adafruit_ads1x15.ads1015 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
 import RPi.GPIO as GPIO
-
-
+#
+# BCRobotics Test App V3.3
+#
 out_temp = 0
 
 try:
@@ -62,20 +67,30 @@ GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 # Event to detect wind (4 ticks per revolution)
-GPIO.add_event_detect(17, GPIO.BOTH)
 def windtrig(self):
     global windTick
     windTick += 1
 
-GPIO.add_event_callback(17, windtrig)
+try:
+    GPIO.add_event_detect(17, GPIO.BOTH)
+    GPIO.add_event_callback(17, windtrig) 
+    WindSpSens = True
+except Exception as err:
+    print ('Wind Speed Error:', err)
+    WindSpSens = False
 
 # Event to detect rain (0.2794mm per tick)
-GPIO.add_event_detect(23, GPIO.FALLING)
 def raintrig(self):
     global rainTick
     rainTick += 1
 
-GPIO.add_event_callback(23, raintrig)
+try:
+    GPIO.add_event_detect(23, GPIO.FALLING)
+    GPIO.add_event_callback(23, raintrig) 
+    RainSensor = True
+except Exception as err:
+    print ('Rain Sensor Error:', err)
+    RainSensor = False
 
 while True:
    
@@ -153,12 +168,18 @@ while True:
 
     # Calculate the average wind speed over 
     #   this 'interval' in km/h
-    windSpeed = (windTick * 1.2) / interval
-    windTick = 0
+    if WindSpSens :
+        windSpeed = (windTick * 1.2) / interval
+        windTick = 0
+    else:
+        windSpeed = 0
 
     #Calculate the rainfall over this 'interval' in mm
-    rainFall = rainTick * 0.2794
-    rainTick = 0
+    if RainSensor :
+        rainFall = rainTick * 0.2794
+        rainTick = 0
+    else:
+        rainFall = 0
     
     # Print results
     print("\nTemperature: %0.1f C" % out_temp)
@@ -172,5 +193,3 @@ while True:
     print ("Rainfall:   %0.2f  mm" % rainFall)
     print (" ")
     time.sleep(interval)
-    
-
