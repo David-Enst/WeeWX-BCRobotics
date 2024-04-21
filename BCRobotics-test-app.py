@@ -1,8 +1,8 @@
 import time
-import sys	
-# Define path to virtual PYTHON libraries
-#  to make testing easier, if desired
-sys.path.extend(["/home/user/virtenv/lib/python3.11/site-packages"])
+import datetime
+
+#import sys	# Define path to virtual PYTHON libraries
+#sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
 
 import board
 import busio
@@ -12,18 +12,31 @@ from w1thermsensor import W1ThermSensor
 import adafruit_ads1x15.ads1015 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
-import RPi.GPIO as GPIO
+# Use the button object to detect the wind speed and rain
+from gpiozero import Device, Button
+
 #
-# BCRobotics Test App V3.3
+# BCRobotics Test App V5.8
 #
 out_temp = 0
+windTick = 0     # Count of the wind speed input trigger
+rainTick = 0     # Count of the rain input trigger
+interval = 3     # Refresh readings every 3 seconds
+rainTime = 0     # Use this to detect erroneous rain events
+out_Temp = 0     # Set now to define scope for rain check
+last_out = 0     # To handle temp sensor errors
+TempSensor = False  # Temperature sensor flag
+PresSensor = False  # Pressure sensor flag
+WindSensor = False  # Wind direction sensor flag
+WindSpSens = False  # Wind speed sensor flag
+RainSensor = False  # Rain measurement sensor flag
 
 try:
     ds18b20 = W1ThermSensor()
-    print ('DS18b20 temp sensor OK')
+    print('W1ThermSensor setup fine.')
     TempSensor = True
 except Exception as err:
-    print ('Temperature Sensor Error:', err)
+    print('Temperature Sensor Error %s' % err)
     TempSensor = False
 
 # Create library object using our Bus I2C port
@@ -31,74 +44,78 @@ i2c = busio.I2C(board.SCL, board.SDA)
 
 try:
      bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) # temp, pressure, humidity
-     PressSensor = True
+     PresSensor = True
+     print('BME280 Pressure setup fine.')
 except Exception as err:
      print ('BME280 Pressure Error:', err)
-     PressSensor = False
+     PresSensor = False
  
 try:
-     ads = ADS.ADS1015(i2c)        # wind and rain
+     ads = ADS.ADS1015(i2c)        # wind direction
      ads.gain = 1
      chan = AnalogIn(ads, ADS.P0)
      WindSensor = True
+     print ('Wind Direction setup fine.')
 except Exception as err:
-     print ('Wind Sensor Error:', err)
+     print ('Wind Direction Error:', err)
      WindSensor = False
 
-if PressSensor :
+if PresSensor :
     try:
-        bme.sea_level_pressure = 1025.25 # generic value
+        bme.sea_level_pressure = 1013.25 # sea level generic value
+        print ('Pressure and humidity setup fine.')
     except Exception as err:
-        loginf('Pressure Sensor Error: %s' % err)
+        print ('Pressure and humidity sensor error.')
 
-
-interval = 8   # Time between loops (seconds)
-windTick = 0   # Count of the wind speed input trigger
-rainTick = 0   # Count of the rain input trigger
-val      = 0   # Wind direction
-
-# Set GPIO pins to use BCM pin numbers
-GPIO.setmode(GPIO.BCM)
-
-# Set digital pin 17 to an input and enable the pullup (wind speed)
-GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-# Set digital pin 23 to an input and enable the pullup (rain)
-GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-# Event to detect wind (4 ticks per revolution)
+# Define event to detect wind (4 ticks per revolution)
+#  1 tick/sec = 1.492 mph or 2.4 km/h
+#  So: wind = (windTick * 2.4) / loop_interval
 def windtrig(self):
+    print ('Wind Speed tick.')
     global windTick
     windTick += 1
 
+# Set digital pin 17 to an input (wind speed)
 try:
-    GPIO.add_event_detect(17, GPIO.BOTH)
-    GPIO.add_event_callback(17, windtrig) 
+    windEvent = Button(17) #, pin_factory=factory)
     WindSpSens = True
+    print ('Wind Speed setup fine.')
 except Exception as err:
-    print ('Wind Speed Error:', err)
+    print ('Wind Speed Error: ', err)
     WindSpSens = False
+        
 
-# Event to detect rain (0.2794mm per tick)
+# Define event callbacks for both 'pressed' and 'released'
+if WindSpSens : 
+    windEvent.when_pressed = windtrig
+    windEvent.when_released = windtrig
+
+# Define event to detect rain (0.2794mm per tick)
+# with a 1hr time period where the first tick is ignored
+# which is used to detect an improper single tick
 def raintrig(self):
+    print ('Rain tick.')
     global rainTick
     rainTick += 1
 
+
+# Set digital pin 23 to an input (rain)
 try:
-    GPIO.add_event_detect(23, GPIO.FALLING)
-    GPIO.add_event_callback(23, raintrig) 
+    rainEvent = Button(23) #, pin_factory=factory)
     RainSensor = True
+    print ('Rain setup fine.')
 except Exception as err:
-    print ('Rain Sensor Error:', err)
+    print ('Rain Error:', err)
     RainSensor = False
 
+# Define event callbacks for 'pressed' 
+if RainSensor :
+    rainEvent.when_pressed = raintrig
+
 while True:
-   
-    # Get temperature from DS18B20 sensor
-    if TempSensor : out_temp = ds18b20.get_temperature()
 
     # Get Temperature, humidity & Pressure from BME280
-    if PressSensor : 
+    if PresSensor : 
         case_temp = bme.temperature 
         pressure_pa= bme.pressure
         #pressure_pa = pressure_pa + 87/8.3 # adjust to sea level
@@ -110,13 +127,18 @@ while True:
         case_temp = 0
         pressure = 0
         humidity = 0
+   
+    # Get temperature from DS18B20 sensor
+    if TempSensor : out_temp = ds18b20.get_temperature()
+    else: out_temp = case_temp
 
 
     # Calculate wind direction based on ADC reading
     #   Read ADC channel 0 with a gain of 1
     if WindSensor : val = chan.value
+    else: val = 7000
 
-    windDir = "Not connected"
+    windDir = "No Sensor"
 
     if 19600 <= val <= 20999:
         windDir = "N"
@@ -181,13 +203,15 @@ while True:
     else:
         rainFall = 0
     
+    ts = time.time()
+    myTime = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     # Print results
-    print("\nTemperature: %0.1f C" % out_temp)
+    print("\nTime: " , myTime)
+    print("Temperature: %0.1f C" % out_temp)
     print("Humidity: %0.1f %%" % humidity)
     print("Pressure: %0.2f hPa" % pressure)
     print("Case Temperature: %0.1f C" % case_temp) 
     print("Altitude = %0.2f meters" % altitude)
-    
     print( 'Wind Dir:    ' , windDir, ' (', val, ')')
     print ("Wind Speed: %0.2f km/h" % windSpeed)
     print ("Rainfall:   %0.2f  mm" % rainFall)
