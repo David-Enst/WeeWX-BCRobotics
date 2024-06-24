@@ -3,6 +3,8 @@ import datetime
 
 #import sys	# Define path to virtual PYTHON libraries
 #sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
+import sys	# Define path to virtual PYTHON libraries
+sys.path.extend(["/home/dave/weeve/lib/python3.11/site-packages"])
 
 import board
 import busio
@@ -16,7 +18,7 @@ from adafruit_ads1x15.analog_in import AnalogIn
 from gpiozero import Device, Button
 
 #
-# BCRobotics Test App V5.8
+# BCRobotics Test App V5.11
 #
 out_temp = 0
 windTick = 0     # Count of the wind speed input trigger
@@ -26,43 +28,50 @@ rainTime = 0     # Use this to detect erroneous rain events
 out_Temp = 0     # Set now to define scope for rain check
 last_out = 0     # To handle temp sensor errors
 TempSensor = False  # Temperature sensor flag
-PresSensor = False  # Pressure sensor flag
-WindSensor = False  # Wind direction sensor flag
+I2CSensor =  False  # I2C interface flag
 WindSpSens = False  # Wind speed sensor flag
 RainSensor = False  # Rain measurement sensor flag
 
+# Setup Temperature sensor
 try:
     ds18b20 = W1ThermSensor()
-    print('W1ThermSensor setup fine.')
-    TempSensor = True
+    time.sleep(interval)
+
 except Exception as err:
-    print('Temperature Sensor Error %s' % err)
+    print ('Temperature Sensor Error: %s' % err)
     TempSensor = False
+else:
+    print ('W1ThermSensor setup fine.')
+    TempSensor = True
 
 # Create library object using our Bus I2C port
 i2c = busio.I2C(board.SCL, board.SDA)
-
-try:
-     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) # temp, pressure, humidity
-     PresSensor = True
-     print('BME280 Pressure setup fine.')
-except Exception as err:
-     print ('BME280 Pressure Error:', err)
-     PresSensor = False
  
+# Setup wind direction ADC
 try:
-     ads = ADS.ADS1015(i2c)        # wind direction
+     ads = ADS.ADS1015(i2c)
      ads.gain = 1
      chan = AnalogIn(ads, ADS.P0)
-     WindSensor = True
-     print ('Wind Direction setup fine.')
 except Exception as err:
-     print ('Wind Direction Error:', err)
-     WindSensor = False
+     print ('Wind Direction setup Error: %s' % err)
+     I2CSensor = False
+else:
+     print ('Wind Direction setup fine.')
+     I2CSensor = True
+     
+# If BME setup gets an error then the wind dir won't work too
+try:
+     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) 
+except Exception as err:
+     print ('BME280 Error: %s' % err)
+     I2CSensor = False
+else:
+     I2CSensor = True
+     print ('BME280 setup fine.')
 
-if PresSensor :
+if I2CSensor :
     try:
-        bme.sea_level_pressure = 1013.25 # sea level generic value
+        bme.sea_level_pressure = 1010.25 # generic value
         print ('Pressure and humidity setup fine.')
     except Exception as err:
         print ('Pressure and humidity sensor error.')
@@ -71,18 +80,19 @@ if PresSensor :
 #  1 tick/sec = 1.492 mph or 2.4 km/h
 #  So: wind = (windTick * 2.4) / loop_interval
 def windtrig(self):
-    print ('Wind Speed tick.')
     global windTick
     windTick += 1
+    print ('Wind Tick.')
 
 # Set digital pin 17 to an input (wind speed)
 try:
-    windEvent = Button(17) #, pin_factory=factory)
+    windEvent = Button(17)
+except Exception as err:
+    print ('Wind Speed Error: %s' % err)
+    WindSpSens = False
+else: 
     WindSpSens = True
     print ('Wind Speed setup fine.')
-except Exception as err:
-    print ('Wind Speed Error: ', err)
-    WindSpSens = False
         
 
 # Define event callbacks for both 'pressed' and 'released'
@@ -94,19 +104,19 @@ if WindSpSens :
 # with a 1hr time period where the first tick is ignored
 # which is used to detect an improper single tick
 def raintrig(self):
-    print ('Rain tick.')
     global rainTick
     rainTick += 1
-
+    print ('Rain Tick.')
 
 # Set digital pin 23 to an input (rain)
 try:
-    rainEvent = Button(23) #, pin_factory=factory)
+    rainEvent = Button(23)
+except Exception as err:
+    print ('Rain Error: %s' % err)
+    RainSensor = False
+else: 
     RainSensor = True
     print ('Rain setup fine.')
-except Exception as err:
-    print ('Rain Error:', err)
-    RainSensor = False
 
 # Define event callbacks for 'pressed' 
 if RainSensor :
@@ -115,7 +125,7 @@ if RainSensor :
 while True:
 
     # Get Temperature, humidity & Pressure from BME280
-    if PresSensor : 
+    if I2CSensor : 
         case_temp = bme.temperature 
         pressure_pa= bme.pressure
         #pressure_pa = pressure_pa + 87/8.3 # adjust to sea level
@@ -135,7 +145,7 @@ while True:
 
     # Calculate wind direction based on ADC reading
     #   Read ADC channel 0 with a gain of 1
-    if WindSensor : val = chan.value
+    if I2CSensor : val = chan.value
     else: val = 7000
 
     windDir = "No Sensor"
