@@ -19,6 +19,7 @@ To make testing easier:
 import sys	# Define path to virtual PYTHON libraries
 sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
 
+
 """
 
 import time
@@ -45,7 +46,7 @@ import weewx.units
 import weewx.accum
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '3.3.8'
+DRIVER_VERSION = '3.3.12'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s' % msg)
@@ -72,7 +73,7 @@ windDir = 0      # compass deg
 out_Temp = 0     # degree_C
 rain = 0         # cm as per default
 rainRate = 0     # cm/hr
-pressure = 0     # mbar
+pressure = 0     # mbar from the BME280
 case_temp = 0    # degree_C
 in_humidity = 0  # percent
 out_humidity = 0 # percent
@@ -84,7 +85,7 @@ val = 0          # wind direction value
 
 
 TempSensor = False  # Temperature sensor good flag
-PressSensor = False # Pressure sensor good flag
+I2CSensor =  False  # I2C interface flag (BME280 & Wind Dir)
 WindSensor = False  # Wind direction sensor good flag
 WindSpSens = False  # Wind speed sensor good flag
 RainSensor = False  # Rain measurement sensor good flag
@@ -95,37 +96,40 @@ loginf('Driver version - %s' % DRIVER_VERSION)
 try:
     ds18b20 = W1ThermSensor()
     time.sleep(interval)
-    loginf('W1ThermSensor setup fine.')
+
 except Exception as err:
     logerr('Temperature Sensor Error: %s' % err)
     TempSensor = False
 else:
+    loginf('W1ThermSensor setup fine.')
     TempSensor = True
+
 # Create library object using our Bus I2C port
 i2c = busio.I2C(board.SCL, board.SDA)
 
-# Setup case temp, pressure, & humidity
-try:
-     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) 
-     loginf('BME280 setup fine.')
-except Exception as err:
-     logerr('BME280 Error: %s' % err)
-     PressSensor = False
-else:
-     PressSensor = True
- 
 # Setup wind direction ADC
 try:
      ads = ADS.ADS1015(i2c)
      ads.gain = 1
      chan = AnalogIn(ads, ADS.P0)
-     loginf('Wind Direction setup fine.')
 except Exception as err:
      logerr('Wind Direction setup Error: %s' % err)
-     WindSensor = False
+     I2CSensor = False
 else:
-     WindSensor = True
+    loginf('Wind Direction setup fine.')
+    I2CSensor = True
 
+# Setup case temp, pressure, & humidity
+try:
+     bme = adafruit_bme280.Adafruit_BME280_I2C(i2c) 
+
+except Exception as err:
+     logerr('BME280 Error: %s' % err)
+     I2CSensor = False
+else:
+     I2CSensor = True
+     loginf('BME280 setup fine.')
+     
 def loader(config_dict, _):
     return BCRoboDriver(**config_dict[DRIVER_NAME])
 
@@ -220,13 +224,14 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
         global WindSpSens
         try:
             windEvent = Button(17)
-            loginf('Wind Speed setup fine.')
+
         except Exception as err:
             logerr('Wind Speed Error: %s' % err)
             WindSpSens = False
         else: 
             WindSpSens = True
-            
+            loginf('Wind Speed setup fine.')      
+
         # Define event callbacks for both 'pressed' and 'released'
         if WindSpSens : 
             windEvent.when_pressed = windtrig
@@ -244,13 +249,14 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
         # Set digital pin 23 to an input (rain)
         try:
             rainEvent = Button(23)
-            loginf('Rain setup fine.')
+
         except Exception as err:
             logerr('Rain Error: %s' % err)
             RainSensor = False
         else: 
             RainSensor = True
-
+            loginf('Rain setup fine.')
+        
         # Define event callbacks for 'pressed'
         if RainSensor :
             rainEvent.when_pressed = raintrig
@@ -321,7 +327,7 @@ class StationData():
         global pressure
         global in_humidity
         global altitude
-        global PressSensor
+        global I2CSensor
         global out_Temp
         global last_out
         global TempSensor
@@ -341,7 +347,7 @@ class StationData():
         global heat_index
                                                 
         # If sensor OK, get case Temperature from BME280 in degrees_C
-        if PressSensor :
+        if I2CSensor :
             case_temp = bme.temperature      
             # Get Barometric Pressure from BME280 in mbar
             #   mbar = hPa
@@ -352,8 +358,8 @@ class StationData():
             #loginf('BCRobo Humidity: ' + str(in_humidity))
             altitude = bme.altitude
         else: 
-            case_temp = 10
-            pressure = 850
+            case_temp = 20
+            pressure = 990
             in_humidity = 90
 
         # Get temperature from DS18B20 sensor in degrees_C
@@ -392,7 +398,7 @@ class StationData():
 
         # Calculate wind direction (angle) based on ADC reading
         #   Read ADC channel 0 with a gain of 1
-        if WindSensor :
+        if I2CSensor :
             val = chan.value
         else:
             val = 7000
