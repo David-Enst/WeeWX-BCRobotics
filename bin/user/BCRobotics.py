@@ -1,4 +1,4 @@
-# Copyright 2024 David W. Enstrom, all rights reserved
+# Copyright 2025 David W. Enstrom, all rights reserved
 # Distributed under the terms of the GNU Public License (GPLv3)
 """
 Driver to collect data from the "Spark Fun" SEN-08942 RoHS
@@ -17,36 +17,14 @@ NOTE: With the Bookworms version of Raspbian Python is installed in a virtual en
 
 To make testing easier:
 import sys	# Define path to virtual PYTHON libraries
-sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
-
+sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.13/site-packages"])
 
 """
-
-import time
-import datetime
-import board
-import busio
 import syslog
-import threading
-import math
-
-from adafruit_bme280 import basic as adafruit_bme280
-from w1thermsensor import W1ThermSensor
-import adafruit_ads1x15.ads1015 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
-
-# Use the button object to detect the wind speed and rain
-from gpiozero import Button
-
-# Set  PATH for files (pin factory issue w driver as daemon )
-from os import chdir
-
-import weewx.drivers
-import weewx.units
-import weewx.accum
+import os
 
 DRIVER_NAME = 'BCRobotics'
-DRIVER_VERSION = '3.3.12'
+DRIVER_VERSION = '3.3.29'
 
 def logmsg(dst, msg):
     syslog.syslog(dst, 'BCRobo: %s' % msg)
@@ -59,6 +37,32 @@ def loginf(msg):
 
 def logerr(msg):
     logmsg(syslog.LOG_ERR, msg)
+
+loginf('Driver version - %s' % DRIVER_VERSION)
+
+# Set the working directory
+os.chdir("/tmp/")
+
+import time
+import datetime
+import board
+import busio
+import threading
+import math
+
+from adafruit_bme280 import basic as adafruit_bme280
+
+from w1thermsensor import W1ThermSensor
+
+from adafruit_ads1x15 import ADS1015, AnalogIn, ads1x15
+
+# Use the button object to detect the wind speed and rain
+from gpiozero import Button
+
+import weewx.drivers
+import weewx.units
+import weewx.accum
+
 
 windTick = 0     # Count of the wind speed input trigger
 rainTick = 0     # Count of the rain input trigger
@@ -90,7 +94,6 @@ WindSensor = False  # Wind direction sensor good flag
 WindSpSens = False  # Wind speed sensor good flag
 RainSensor = False  # Rain measurement sensor good flag
 
-loginf('Driver version - %s' % DRIVER_VERSION)
 
 # Setup Temperature sensor
 try:
@@ -109,9 +112,9 @@ i2c = busio.I2C(board.SCL, board.SDA)
 
 # Setup wind direction ADC
 try:
-     ads = ADS.ADS1015(i2c)
+     ads = ADS1015(i2c)
      ads.gain = 1
-     chan = AnalogIn(ads, ADS.P0)
+     chan = AnalogIn(ads, ads1x15.Pin.A0)
 except Exception as err:
      logerr('Wind Direction setup Error: %s' % err)
      I2CSensor = False
@@ -207,9 +210,6 @@ class BCRoboDriver(weewx.drivers.AbstractDevice):
         global RainSensor
         rainTime = int(time.time())   # used to detect erronious rain ticks
         interval = int(stn_dict.get('loop_interval', 3))
-        
-        # Set  PATH for file creation (pin factory issue w driver as daemon )
-        chdir('/tmp') 
         
         # Define event to detect wind (4 ticks per revolution)
         #  1 tick/sec = 1.492 mph or 2.4 km/h
@@ -551,6 +551,9 @@ if __name__ == '__main__':
     syslog.setlogmask(syslog.LOG_UPTO(syslog.LOG_DEBUG))
     
     with StationData() as s:
+        #print('\n'.join(sys.path))
+        print("Driver version: %s" % DRIVER_VERSION)
+        #print(f"Current working directory: {initial_cwd}")
         # Print results
         while True:
             s.get_readings()
