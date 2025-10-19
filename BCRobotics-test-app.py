@@ -2,23 +2,23 @@ import time
 import datetime
 
 #import sys	# Define path to virtual PYTHON libraries
-#sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.11/site-packages"])
+#sys.path.extend(["/home/USER/VIRTUALENV/lib64/python3.13/site-packages"])
 import sys	# Define path to virtual PYTHON libraries
-sys.path.extend(["/home/dave/weeve/lib/python3.11/site-packages"])
+sys.path.extend(["/home/dave/weeve/lib/python3.13/site-packages"])
 
 import board
 import busio
 from adafruit_bme280 import basic as adafruit_bme280
 
 from w1thermsensor import W1ThermSensor
-import adafruit_ads1x15.ads1015 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
+
+from adafruit_ads1x15 import ADS1015, AnalogIn, ads1x15
 
 # Use the button object to detect the wind speed and rain
 from gpiozero import Device, Button
 
 #
-# BCRobotics Test App V5.11
+# BCRobotics Test App V5.14
 #
 out_temp = 0
 windTick = 0     # Count of the wind speed input trigger
@@ -49,9 +49,9 @@ i2c = busio.I2C(board.SCL, board.SDA)
  
 # Setup wind direction ADC
 try:
-     ads = ADS.ADS1015(i2c)
+     ads = ADS1015(i2c)
      ads.gain = 1
-     chan = AnalogIn(ads, ADS.P0)
+     chan = AnalogIn(ads, ads1x15.Pin.A0)
 except Exception as err:
      print ('Wind Direction setup Error: %s' % err)
      I2CSensor = False
@@ -227,3 +227,4 @@ while True:
     print ("Rainfall:   %0.2f  mm" % rainFall)
     print (" ")
     time.sleep(interval)
+
